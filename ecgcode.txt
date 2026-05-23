@@ -1,0 +1,246 @@
+clc;
+clear;
+close all;
+
+% Connect to ESP32
+s = serialport("COM5",115200);
+pause(2);
+
+disp("Starting Real-Time ECG...");
+
+figure;
+h = animatedline;
+title('Real-Time ECG Signal');
+xlabel('Samples');
+ylabel('Amplitude');
+
+data = [];
+i = 1;
+
+% -----------------------------
+% REAL-TIME ECG
+while i <= 2000
+    
+    if s.NumBytesAvailable > 0
+        
+        val = str2double(readline(s));
+        
+        if ~isnan(val)
+            data = [data val];
+            
+            addpoints(h, i, val);
+            drawnow;
+            
+            i = i + 1;
+        end
+    end
+end
+
+disp("Data Collection Done");
+
+% -----------------------------
+% FILTERING
+filtered = filter(ones(1,10)/10,1,data);
+
+% -----------------------------
+% ADVANCED R-PEAK DETECTION
+[peaks, locs] = findpeaks(filtered, ...
+    'MinPeakHeight', mean(filtered)+20, ...
+    'MinPeakDistance', 50);
+
+% -----------------------------
+% HEART RATE
+RR = diff(locs);
+fs = 200;
+HR = 60 / (mean(RR)/fs);
+
+% -----------------------------
+% CONDITION
+if HR < 60
+    condition = 'Bradycardia';
+elseif HR > 100
+    condition = 'Tachycardia';
+else
+    condition = 'Normal';
+end
+
+% -----------------------------
+% ARRHYTHMIA
+if std(RR) > 20
+    arrhythmia = 'Irregular';
+else
+    arrhythmia = 'Regular';
+end
+
+% -----------------------------
+% SIGNAL QUALITY
+if std(filtered) < 5
+    quality = 'Poor Signal';
+else
+    quality = 'Good Signal';
+end
+
+% -----------------------------
+% 🔔 BEEP ON EACH HEARTBEAT
+for k = 1:length(locs)
+    beep;
+    pause(0.15);
+end
+
+% -----------------------------
+% ⚠️ ALERT
+if ~strcmp(condition,'Normal')
+    warning('Abnormal Heart Condition Detected!');
+end
+
+clc;
+clear;
+close all;
+
+% Connect to ESP32
+s = serialport("COM5",115200);
+pause(2);
+
+disp("Starting Real-Time ECG...");
+
+figure;
+h = animatedline;
+title('Real-Time ECG Signal');
+xlabel('Samples');
+ylabel('Amplitude');
+
+data = [];
+i = 1;
+
+% -----------------------------
+% REAL-TIME ECG
+while i <= 2000
+    
+    if s.NumBytesAvailable > 0
+        
+        val = str2double(readline(s));
+        
+        if ~isnan(val)
+            data = [data val];
+            
+            addpoints(h, i, val);
+            drawnow;
+            
+            i = i + 1;
+        end
+    end
+end
+
+disp("Data Collection Done");
+
+% -----------------------------
+% FILTERING
+filtered = filter(ones(1,10)/10,1,data);
+
+% -----------------------------
+% ADVANCED R-PEAK DETECTION
+[peaks, locs] = findpeaks(filtered, ...
+    'MinPeakHeight', mean(filtered)+20, ...
+    'MinPeakDistance', 50);
+
+% -----------------------------
+% HEART RATE
+RR = diff(locs);
+fs = 200;
+HR = 60 / (mean(RR)/fs);
+
+% -----------------------------
+% CONDITION
+if HR < 60
+    condition = 'Bradycardia';
+elseif HR > 100
+    condition = 'Tachycardia';
+else
+    condition = 'Normal';
+end
+
+% -----------------------------
+% ARRHYTHMIA
+if std(RR) > 20
+    arrhythmia = 'Irregular';
+else
+    arrhythmia = 'Regular';
+end
+
+% -----------------------------
+% SIGNAL QUALITY
+if std(filtered) < 5
+    quality = 'Poor Signal';
+else
+    quality = 'Good Signal';
+end
+
+% -----------------------------
+% 🔔 BEEP ON EACH HEARTBEAT
+for k = 1:length(locs)
+    beep;
+    pause(0.15);
+end
+
+% -----------------------------
+% ⚠️ ALERT
+if ~strcmp(condition,'Normal')
+    warning('Abnormal Heart Condition Detected!');
+end
+
+% -----------------------------
+% FINAL GRAPH
+figure;
+plot(filtered, 'b', 'LineWidth',1.2);
+hold on;
+plot(locs, peaks, 'ro', 'MarkerSize',8);
+
+grid on;
+title('Final ECG Analysis');
+xlabel('Samples');
+ylabel('Amplitude');
+
+% Display results ON GRAPH
+text(50, max(filtered)*0.9, ['HR: ', num2str(HR), ' BPM'], 'FontSize',11);
+text(50, max(filtered)*0.8, ['Condition: ', condition], 'FontSize',11);
+text(50, max(filtered)*0.7, ['Rhythm: ', arrhythmia], 'FontSize',11);
+text(50, max(filtered)*0.6, ['Signal: ', quality], 'FontSize',11);
+
+% -----------------------------
+% SAVE DATA
+writematrix(data, 'ecg_record.txt');
+
+% -----------------------------
+% REPORT FILE
+fid = fopen('ECG_Report.txt','w');
+fprintf(fid,'ECG REPORT\n');
+fprintf(fid,'-----------------\n');
+fprintf(fid,'Heart Rate: %.2f BPM\n',HR);
+fprintf(fid,'Condition: %s\n',condition);
+fprintf(fid,'Rhythm: %s\n',arrhythmia);
+fprintf(fid,'Signal Quality: %s\n',quality);
+fclose(fid);
+
+disp('Report Generated Successfully');
+
+% -----------------------------
+% COMMAND WINDOW OUTPUT
+disp(['Heart Rate: ', num2str(HR)]);
+disp(['Condition: ', condition]);
+disp(['Arrhythmia: ', arrhythmia]);
+disp(['Signal Quality: ', quality]);
+
+% -----------------------------
+% RED LED + BUZZER CONTROL (SEND TO ESP32)
+
+disp("Sending condition to ESP32...");
+
+if strcmp(condition,'Normal')
+    writeline(s, "N");   % Normal
+elseif strcmp(condition,'Bradycardia')
+    writeline(s, "B");   % Low HR
+elseif strcmp(condition,'Tachycardia')
+    writeline(s, "T");   % High HR
+end
+
+pause(1);
